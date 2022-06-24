@@ -11,8 +11,8 @@ generatorOptions:
   disableNameSuffixHash: true
 images:
 - name: quay.io/dexidp/dex
-  newName: quay.io/dexidp/dex
-  newTag: v2.24.0
+  newName: registry.cn-hangzhou.aliyuncs.com/seam/dexidp.dex
+  newTag: v2.28.1
 
 secretGenerator:
 - name: dex-oidc-client

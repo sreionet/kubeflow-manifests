@@ -1,0 +1,547 @@
+From d212c1a48eb6fc92afed8740e3b7e2712308d827 Mon Sep 17 00:00:00 2001
+From: kbsonlong <kbsonlong@gmail.com>
+Date: Fri, 24 Jun 2022 16:44:46 +0800
+Subject: [PATCH] =?UTF-8?q?doc:=E4=BF=AE=E6=94=B9=E9=95=9C=E5=83=8F?=
+ =?UTF-8?q?=E5=9C=B0=E5=9D=80?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ .../upstream/components/mysql/kustomization.yaml   |   1 +
+ apps/katib/upstream/components/mysql/pv.yaml       |  22 ++++
+ apps/katib/upstream/components/mysql/pvc.yaml      |   1 +
+ .../pipelines-profile-controller/sync.py           |   4 +-
+ .../pipelines-profile-controller/sync.py           |   4 +-
+ .../third-party/minio/base/kustomization.yaml      |   1 +
+ .../upstream/third-party/minio/base/minio-pv.yaml  |  22 ++++
+ .../upstream/third-party/minio/base/minio-pvc.yaml |   2 +
+ .../third-party/mysql/base/kustomization.yaml      |   1 +
+ .../third-party/mysql/base/mysql-pv-claim.yaml     |   2 +
+ .../upstream/third-party/mysql/base/mysql-pv.yaml  |  22 ++++
+ .../upstream/base/deployment.yaml                  |   2 +-
+ common/dex/base/config-map.yaml                    |   2 +-
+ common/dex/base/kustomization.yaml                 |   4 +-
+ common/dex/overlays/istio/virtual-service.yaml     |   2 +-
+ .../knative-serving/base/kustomization.yaml        |  10 +-
+ .../base/upstream/serving-core.yaml                |   2 +-
+ common/oidc-authservice/base/kustomization.yaml    |   3 +-
+ common/oidc-authservice/base/local_pv.yaml         |  14 +++
+ common/oidc-authservice/base/params.env            |   2 +-
+ common/oidc-authservice/base/pvc.yaml              |   3 +-
+ example/kustomization.yaml                         | 140 ++++++++++++++++++++-
+ 22 files changed, 244 insertions(+), 22 deletions(-)
+ create mode 100644 apps/katib/upstream/components/mysql/pv.yaml
+ create mode 100644 apps/pipeline/upstream/third-party/minio/base/minio-pv.yaml
+ create mode 100644 apps/pipeline/upstream/third-party/mysql/base/mysql-pv.yaml
+ create mode 100644 common/oidc-authservice/base/local_pv.yaml
+
+diff --git a/apps/katib/upstream/components/mysql/kustomization.yaml b/apps/katib/upstream/components/mysql/kustomization.yaml
+index b937e0c..4f13001 100644
+--- a/apps/katib/upstream/components/mysql/kustomization.yaml
++++ b/apps/katib/upstream/components/mysql/kustomization.yaml
+@@ -3,6 +3,7 @@ kind: Kustomization
+ 
+ resources:
+   - mysql.yaml
++  - pv.yaml
+   - pvc.yaml
+   - secret.yaml
+   - service.yaml
+diff --git a/apps/katib/upstream/components/mysql/pv.yaml b/apps/katib/upstream/components/mysql/pv.yaml
+new file mode 100644
+index 0000000..f2a8093
+--- /dev/null
++++ b/apps/katib/upstream/components/mysql/pv.yaml
+@@ -0,0 +1,22 @@
++apiVersion: v1
++kind: PersistentVolume
++metadata:
++  labels:
++    type: katib-mysql-pv
++  name: katib-mysql-pv
++spec:
++  accessModes:
++  - ReadWriteOnce
++  capacity:
++    storage: 20Gi
++  claimRef:
++    apiVersion: v1
++    kind: PersistentVolumeClaim
++    name: katib-mysql
++    namespace: kubeflow
++  hostPath:
++    path: /data/localvol/katib-mysql
++    type: DirectoryOrCreate
++  persistentVolumeReclaimPolicy: Retain
++  storageClassName: manual
++  volumeMode: Filesystem
+diff --git a/apps/katib/upstream/components/mysql/pvc.yaml b/apps/katib/upstream/components/mysql/pvc.yaml
+index da447fb..dd31d46 100644
+--- a/apps/katib/upstream/components/mysql/pvc.yaml
++++ b/apps/katib/upstream/components/mysql/pvc.yaml
+@@ -4,6 +4,7 @@ metadata:
+   name: katib-mysql
+   namespace: kubeflow
+ spec:
++  storageClassName: manual
+   accessModes:
+     - ReadWriteOnce
+   resources:
+diff --git a/apps/kfp-tekton/upstream/base/installs/multi-user/pipelines-profile-controller/sync.py b/apps/kfp-tekton/upstream/base/installs/multi-user/pipelines-profile-controller/sync.py
+index a1339cb..e99b634 100644
+--- a/apps/kfp-tekton/upstream/base/installs/multi-user/pipelines-profile-controller/sync.py
++++ b/apps/kfp-tekton/upstream/base/installs/multi-user/pipelines-profile-controller/sync.py
+@@ -51,11 +51,11 @@ def get_settings_from_env(controller_port=None,
+ 
+     settings["visualization_server_image"] = \
+         visualization_server_image or \
+-        os.environ.get("VISUALIZATION_SERVER_IMAGE", "gcr.io/ml-pipeline/visualization-server")
++        os.environ.get("VISUALIZATION_SERVER_IMAGE", "registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/ml-pipeline.visualization-server")
+ 
+     settings["frontend_image"] = \
+         frontend_image or \
+-        os.environ.get("FRONTEND_IMAGE", "gcr.io/ml-pipeline/frontend")
++        os.environ.get("FRONTEND_IMAGE", "registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/ml-pipeline.frontend")
+ 
+     # Look for specific tags for each image first, falling back to
+     # previously used KFP_VERSION environment variable for backwards
+diff --git a/apps/pipeline/upstream/base/installs/multi-user/pipelines-profile-controller/sync.py b/apps/pipeline/upstream/base/installs/multi-user/pipelines-profile-controller/sync.py
+index 3ea1aaa..00a7f32 100644
+--- a/apps/pipeline/upstream/base/installs/multi-user/pipelines-profile-controller/sync.py
++++ b/apps/pipeline/upstream/base/installs/multi-user/pipelines-profile-controller/sync.py
+@@ -51,11 +51,11 @@ def get_settings_from_env(controller_port=None,
+ 
+     settings["visualization_server_image"] = \
+         visualization_server_image or \
+-        os.environ.get("VISUALIZATION_SERVER_IMAGE", "gcr.io/ml-pipeline/visualization-server")
++        os.environ.get("VISUALIZATION_SERVER_IMAGE", "registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/ml-pipeline.visualization-server")
+ 
+     settings["frontend_image"] = \
+         frontend_image or \
+-        os.environ.get("FRONTEND_IMAGE", "gcr.io/ml-pipeline/frontend")
++        os.environ.get("FRONTEND_IMAGE", "registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/ml-pipeline.frontend")
+ 
+     # Look for specific tags for each image first, falling back to
+     # previously used KFP_VERSION environment variable for backwards
+diff --git a/apps/pipeline/upstream/third-party/minio/base/kustomization.yaml b/apps/pipeline/upstream/third-party/minio/base/kustomization.yaml
+index e3b41d4..4556fcf 100644
+--- a/apps/pipeline/upstream/third-party/minio/base/kustomization.yaml
++++ b/apps/pipeline/upstream/third-party/minio/base/kustomization.yaml
+@@ -3,6 +3,7 @@ kind: Kustomization
+ 
+ resources:
+ - minio-deployment.yaml
++- minio-pv.yaml
+ - minio-pvc.yaml
+ - minio-service.yaml
+ - mlpipeline-minio-artifact-secret.yaml
+diff --git a/apps/pipeline/upstream/third-party/minio/base/minio-pv.yaml b/apps/pipeline/upstream/third-party/minio/base/minio-pv.yaml
+new file mode 100644
+index 0000000..978e414
+--- /dev/null
++++ b/apps/pipeline/upstream/third-party/minio/base/minio-pv.yaml
+@@ -0,0 +1,22 @@
++apiVersion: v1
++kind: PersistentVolume
++metadata:
++  labels:
++    type: minio-pv
++  name: minio-pv
++spec:
++  accessModes:
++  - ReadWriteOnce
++  capacity:
++    storage: 20Gi
++  claimRef:
++    apiVersion: v1
++    kind: PersistentVolumeClaim
++    name: minio-pvc
++    namespace: kubeflow
++  hostPath:
++    path: /data/localvol/minio
++    type: DirectoryOrCreate
++  persistentVolumeReclaimPolicy: Retain
++  storageClassName: manual
++  volumeMode: Filesystem
+diff --git a/apps/pipeline/upstream/third-party/minio/base/minio-pvc.yaml b/apps/pipeline/upstream/third-party/minio/base/minio-pvc.yaml
+index ecfa32b..1963c87 100644
+--- a/apps/pipeline/upstream/third-party/minio/base/minio-pvc.yaml
++++ b/apps/pipeline/upstream/third-party/minio/base/minio-pvc.yaml
+@@ -3,8 +3,10 @@ kind: PersistentVolumeClaim
+ metadata:
+   name: minio-pvc
+ spec:
++  storageClassName: manual
+   accessModes:
+   - ReadWriteOnce
+   resources:
+     requests:
+       storage: 20Gi
++  volumeName: minio-pv
+diff --git a/apps/pipeline/upstream/third-party/mysql/base/kustomization.yaml b/apps/pipeline/upstream/third-party/mysql/base/kustomization.yaml
+index df8929c..1e33b00 100644
+--- a/apps/pipeline/upstream/third-party/mysql/base/kustomization.yaml
++++ b/apps/pipeline/upstream/third-party/mysql/base/kustomization.yaml
+@@ -3,6 +3,7 @@ kind: Kustomization
+ 
+ resources:
+ - mysql-deployment.yaml
++- mysql-pv.yaml
+ - mysql-pv-claim.yaml
+ - mysql-service.yaml
+ - mysql-serviceaccount.yaml
+diff --git a/apps/pipeline/upstream/third-party/mysql/base/mysql-pv-claim.yaml b/apps/pipeline/upstream/third-party/mysql/base/mysql-pv-claim.yaml
+index 108dc24..8cfe9e5 100644
+--- a/apps/pipeline/upstream/third-party/mysql/base/mysql-pv-claim.yaml
++++ b/apps/pipeline/upstream/third-party/mysql/base/mysql-pv-claim.yaml
+@@ -3,8 +3,10 @@ kind: PersistentVolumeClaim
+ metadata:
+   name: mysql-pv-claim
+ spec:
++  storageClassName: manual
+   accessModes:
+   - ReadWriteOnce
+   resources:
+     requests:
+       storage: 20Gi
++  volumeName: mysql-pv
+diff --git a/apps/pipeline/upstream/third-party/mysql/base/mysql-pv.yaml b/apps/pipeline/upstream/third-party/mysql/base/mysql-pv.yaml
+new file mode 100644
+index 0000000..a3ef105
+--- /dev/null
++++ b/apps/pipeline/upstream/third-party/mysql/base/mysql-pv.yaml
+@@ -0,0 +1,22 @@
++apiVersion: v1
++kind: PersistentVolume
++metadata:
++  labels:
++    type: mysql-pv
++  name: mysql-pv
++spec:
++  accessModes:
++  - ReadWriteOnce
++  capacity:
++    storage: 20Gi
++  claimRef:
++    apiVersion: v1
++    kind: PersistentVolumeClaim
++    name: mysql-pv-claim 
++    namespace: kubeflow
++  hostPath:
++    path: /data/localvol/mysql
++    type: DirectoryOrCreate
++  persistentVolumeReclaimPolicy: Retain
++  storageClassName: manual
++  volumeMode: Filesystem
+diff --git a/apps/training-operator/upstream/base/deployment.yaml b/apps/training-operator/upstream/base/deployment.yaml
+index 536b782..cbee116 100644
+--- a/apps/training-operator/upstream/base/deployment.yaml
++++ b/apps/training-operator/upstream/base/deployment.yaml
+@@ -49,7 +49,7 @@ spec:
+           resources:
+             limits:
+               cpu: 100m
+-              memory: 30Mi
++              memory: 300Mi
+             requests:
+               cpu: 100m
+               memory: 20Mi
+diff --git a/common/dex/base/config-map.yaml b/common/dex/base/config-map.yaml
+index 5d5d4e2..ffcd636 100644
+--- a/common/dex/base/config-map.yaml
++++ b/common/dex/base/config-map.yaml
+@@ -4,7 +4,7 @@ metadata:
+   name: dex
+ data:
+   config.yaml: |
+-    issuer: http://dex.auth.svc.cluster.local:5556/dex
++    issuer: http://dex.auth.svc.kubeyy.com:5556/dex
+     storage:
+       type: kubernetes
+       config:
+diff --git a/common/dex/base/kustomization.yaml b/common/dex/base/kustomization.yaml
+index 8b3303e..bb80410 100644
+--- a/common/dex/base/kustomization.yaml
++++ b/common/dex/base/kustomization.yaml
+@@ -11,8 +11,8 @@ generatorOptions:
+   disableNameSuffixHash: true
+ images:
+ - name: quay.io/dexidp/dex
+-  newName: quay.io/dexidp/dex
+-  newTag: v2.24.0
++  newName: registry.cn-hangzhou.aliyuncs.com/seam/dexidp.dex
++  newTag: v2.28.1
+ 
+ secretGenerator:
+ - name: dex-oidc-client
+diff --git a/common/dex/overlays/istio/virtual-service.yaml b/common/dex/overlays/istio/virtual-service.yaml
+index 1e1d733..21813f0 100644
+--- a/common/dex/overlays/istio/virtual-service.yaml
++++ b/common/dex/overlays/istio/virtual-service.yaml
+@@ -17,6 +17,6 @@ spec:
+         prefix: /dex/
+     route:
+     - destination:
+-        host: $(DEX_SERVICE).$(DEX_NAMESPACE).svc.cluster.local
++        host: $(DEX_SERVICE).$(DEX_NAMESPACE).svc.kubeyy.com
+         port:
+           number: 5556
+diff --git a/common/knative/knative-serving/base/kustomization.yaml b/common/knative/knative-serving/base/kustomization.yaml
+index be60a96..18bf23a 100644
+--- a/common/knative/knative-serving/base/kustomization.yaml
++++ b/common/knative/knative-serving/base/kustomization.yaml
+@@ -6,10 +6,10 @@ resources:
+ - istio-authorization-policy.yaml
+ patchesStrategicMerge:
+ - patches/configmap-patch.yaml
+-- patches/namespace-injection.yaml
++  #- patches/namespace-injection.yaml
+ - patches/clusterrole-patch.yaml
+ - patches/service-labels.yaml
+-patches:
+-- path: patches/sidecar-injection.yaml
+-  target:
+-    kind: Deployment
++#patches:
++#- path: patches/sidecar-injection.yaml
++#  target:
++#    kind: Deployment
+diff --git a/common/knative/knative-serving/base/upstream/serving-core.yaml b/common/knative/knative-serving/base/upstream/serving-core.yaml
+index b2cab46..54b8164 100644
+--- a/common/knative/knative-serving/base/upstream/serving-core.yaml
++++ b/common/knative/knative-serving/base/upstream/serving-core.yaml
+@@ -972,7 +972,7 @@ metadata:
+   annotations:
+     knative.dev/example-checksum: "fa67b403"
+ data:
+-  queueSidecarImage: gcr.io/knative-releases/knative.dev/serving/cmd/queue@sha256:0b8e031170354950f3395876961452af1c62f7ab5161c9e71867392c11881962
++  queueSidecarImage: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/knative-releases.knative.dev.serving.cmd.queue:20220624 
+   _example: |
+     ################################
+     #                              #
+diff --git a/common/oidc-authservice/base/kustomization.yaml b/common/oidc-authservice/base/kustomization.yaml
+index ccae0f0..4adb713 100644
+--- a/common/oidc-authservice/base/kustomization.yaml
++++ b/common/oidc-authservice/base/kustomization.yaml
+@@ -5,6 +5,7 @@ resources:
+ - service.yaml
+ - statefulset.yaml
+ - envoy-filter.yaml
++- local_pv.yaml
+ - pvc.yaml
+ 
+ namespace: istio-system
+@@ -42,5 +43,5 @@ configurations:
+ - params.yaml
+ images:
+ - name: gcr.io/arrikto/kubeflow/oidc-authservice
+-  newName: gcr.io/arrikto/kubeflow/oidc-authservice
++  newName: registry.cn-hangzhou.aliyuncs.com/seam/arrikto.kubeflow.oidc-authservice
+   newTag: 28c59ef
+diff --git a/common/oidc-authservice/base/local_pv.yaml b/common/oidc-authservice/base/local_pv.yaml
+new file mode 100644
+index 0000000..61c698c
+--- /dev/null
++++ b/common/oidc-authservice/base/local_pv.yaml
+@@ -0,0 +1,14 @@
++apiVersion: v1
++kind: PersistentVolume
++metadata:
++  name: authservice-pv
++  labels:
++    type: local
++spec:
++  storageClassName: manual
++  capacity:
++    storage: 10Gi
++  accessModes:
++    - ReadWriteOnce
++  hostPath:
++    path: "/data/localvol/authservice"        
+diff --git a/common/oidc-authservice/base/params.env b/common/oidc-authservice/base/params.env
+index f41839b..6ed39bb 100644
+--- a/common/oidc-authservice/base/params.env
++++ b/common/oidc-authservice/base/params.env
+@@ -1,4 +1,4 @@
+-OIDC_PROVIDER=http://dex.auth.svc.cluster.local:5556/dex
++OIDC_PROVIDER=http://dex.auth.svc.kubeyy.com:5556/dex
+ OIDC_AUTH_URL=/dex/auth
+ OIDC_SCOPES=profile email groups
+ REDIRECT_URL=/login/oidc
+diff --git a/common/oidc-authservice/base/pvc.yaml b/common/oidc-authservice/base/pvc.yaml
+index da2f06b..9339974 100644
+--- a/common/oidc-authservice/base/pvc.yaml
++++ b/common/oidc-authservice/base/pvc.yaml
+@@ -7,4 +7,5 @@ spec:
+     - ReadWriteOnce
+   resources:
+     requests:
+-      storage: 10Gi
+\ No newline at end of file
++      storage: 10Gi
++  storageClassName: manual
+diff --git a/example/kustomization.yaml b/example/kustomization.yaml
+index 48bb9fb..0ea4d93 100644
+--- a/example/kustomization.yaml
++++ b/example/kustomization.yaml
+@@ -6,9 +6,9 @@ resources:
+ - ../common/cert-manager/cert-manager/base
+ - ../common/cert-manager/kubeflow-issuer/base
+ # Istio
+-- ../common/istio-1-11/istio-crds/base
+-- ../common/istio-1-11/istio-namespace/base
+-- ../common/istio-1-11/istio-install/base
++# - ../common/istio-1-11/istio-crds/base
++# - ../common/istio-1-11/istio-namespace/base
++# - ../common/istio-1-11/istio-install/base
+ # OIDC Authservice
+ - ../common/oidc-authservice/base
+ # Dex
+@@ -27,7 +27,7 @@ resources:
+ 
+ # Kubeflow Pipelines
+ - ../apps/pipeline/upstream/env/cert-manager/platform-agnostic-multi-user
+-# KFServing
++# # KFServing
+ - ../apps/kfserving/upstream/overlays/kubeflow
+ # Katib
+ - ../apps/katib/upstream/installs/katib-with-kubeflow
+@@ -55,3 +55,135 @@ resources:
+ # KServe
+ - ../contrib/kserve/kserve
+ - ../contrib/kserve/models-web-app/overlays/kubeflow
++
++images:
++  - name: quay.io/jetstack/cert-manager-controller:v1.5.0
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/jetstack.cert-manager-controller
++    newTag: v1.5.0
++  - name: quay.io/jetstack/cert-manager-cainjector:v1.5.0
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/jetstack.cert-manager-cainjector
++    newTag: v1.5.0
++  - name: quay.io/jetstack/cert-manager-webhook:v1.5.0
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/jetstack.cert-manager-webhook
++    newTag: v1.5.0
++  - name: gcr.io/knative-releases/knative.dev/eventing/cmd/controller@sha256:6ddffbc286a84048cfd090193d00b4ecda25a3a7bf2de1a8e873f8b3755cc913
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/knative-releases.knative.dev.eventing.cmd.controller
++    newTag: "20220624"
++  - name: gcr.io/knative-releases/knative.dev/eventing/cmd/webhook@sha256:9f70a2a8bb78781472fba0327c5d6ff91f13a29736d4502bf8ad3d60d3f16ccd
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/knative-releases.knative.dev.eventing.cmd.webhook
++    newTag: "20220624"
++  - name: gcr.io/knative-releases/knative.dev/eventing/cmd/in_memory/channel_controller@sha256:904f42a768a9bc64999e7302d2bc7c1c48a08e74a82355cf57be513e6a124b82
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/knative-releases.channel_controller
++    newTag: "20220624"
++  - name: gcr.io/knative-releases/knative.dev/eventing/cmd/in_memory/channel_dispatcher@sha256:a6983f71c04619928199cc21e07ee6f1e1c87586621bc03b10c9ba1abd92bfa8
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/knative-releases.channel_dispatcher
++    newTag: "20220624"
++  - name: gcr.io/knative-releases/knative.dev/eventing/cmd/mtchannel_broker@sha256:a2678934d280ea19b0804cc7757d559a0312e2acea221b17a99bd830cd9eeaac
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/knative-releases.knative.dev.eventing.cmd.mtchannel_broker
++    newTag: "20220624"
++  - name: gcr.io/knative-releases/knative.dev/eventing/cmd/broker/filter@sha256:0e25aa1613a3a1779b3f7b7f863e651e5f37520a7f6808ccad2164cc2b6a9b12
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/knative-releases.knative.dev.eventing.cmd.broker.filter
++    newTag: "20220624"
++  - name: gcr.io/knative-releases/knative.dev/eventing/cmd/broker/ingress@sha256:cf579f88aa2a37c240e25bb886c1ef5404e326e12c7caf571e49308612243eee
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/knative-releases.knative.dev.eventing.cmd.broker.ingress
++    newTag: "20220624"
++  - name: gcr.io/knative-releases/knative.dev/eventing/cmd/mtping@sha256:edf462d03591e53e536640591a53538e6bea837fea15ed081eccfb42bc35a5c0
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/knative-releases.knative.dev.eventing.cmd.mtping
++    newTag: "20220624"
++  - name: gcr.io/knative-releases/knative.dev/serving/cmd/activator@sha256:fed92af8b9779c97482906db8857f27b5d4826708b75d0298aa30fad8900671f
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/knative-releases.knative.dev.serving.cmd.activator
++    newTag: "20220624"
++  - name: gcr.io/knative-releases/knative.dev/serving/cmd/autoscaler@sha256:bc5ae3090ab0322ed0e4f9efddb60fa85f6ff3a29156411d24d0e4764b18eba7
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/knative-releases.knative.dev.serving.cmd.autoscaler
++    newTag: "20220624"
++  - name: gcr.io/knative-releases/knative.dev/serving/cmd/controller@sha256:bd7c6350e5d5c4edaa197a86fb96cff78bdd3e61f33fcb77aa60930de0ec0827
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/knative-releases.knative.dev.serving.cmd.controller
++    newTag: "20220624"
++  - name: gcr.io/knative-releases/knative.dev/net-istio/cmd/webhook@sha256:1e371db6b1a9f9265fc7a55d15d98c935c0c28925ffde351fb3b93f331c5a08e
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/knative-releases.knative.dev.net-istio.cmd.webhook
++    newTag: "20220624"
++  - name: gcr.io/knative-releases/knative.dev/net-istio/cmd/controller@sha256:ff8680da52ef47b8573ebc3393cbfa2f0f14b05c1e02232807f22699adbef57a
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/knative-releases.knative.dev.net-istio.cmd.controller
++    newTag: "20220624"
++  - name: gcr.io/knative-releases/knative.dev/serving/cmd/webhook@sha256:6f41d379f1aacdfbb8f6d4f539e1769040e4f01bff3ad9c249b427e54dc56ea8
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/knative-releases.knative.dev.serving.cmd.webhook
++    newTag: "20220624"
++  - name: gcr.io/ml-pipeline/cache-server:1.8.2
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/ml-pipeline.cache-server
++    newTag: "1.8.2"
++  - name: gcr.io/ml-pipeline/metadata-envoy:1.8.2
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/ml-pipeline.metadata-envoy
++    newTag: "1.8.2"
++  - name: gcr.io/tfx-oss-public/ml_metadata_store_server:1.5.0
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/tfx-oss-public.ml_metadata_store_server
++    newTag: "1.5.0"
++  - name: gcr.io/ml-pipeline/metadata-writer:1.8.2
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/ml-pipeline.metadata-writer
++    newTag: "1.8.2"
++  - name: gcr.io/ml-pipeline/minio:RELEASE.2019-08-14T20-37-41Z-license-compliance
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/ml-pipeline.minio
++    newTag: RELEASE.2019-08-14T20-37-41Z-license-compliance
++  - name: gcr.io/ml-pipeline/api-server:1.8.2
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/ml-pipeline.api-server
++    newTag: "1.8.2"
++  - name: gcr.io/ml-pipeline/persistenceagent:1.8.2
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/ml-pipeline.persistenceagent
++    newTag: "1.8.2"
++  - name: gcr.io/ml-pipeline/scheduledworkflow:1.8.2
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/ml-pipeline.scheduledworkflow
++    newTag: "1.8.2"
++  - name: gcr.io/ml-pipeline/frontend:1.8.2
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/ml-pipeline.frontend
++    newTag: "1.8.2"
++  - name: gcr.io/ml-pipeline/viewer-crd-controller:1.8.2
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/ml-pipeline.viewer-crd-controller
++    newTag: "1.8.2"
++  - name: gcr.io/ml-pipeline/visualization-server:1.8.2
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/ml-pipeline.visualization-server
++    newTag: "1.8.2"
++  - name: gcr.io/ml-pipeline/mysql:5.7
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/ml-pipeline.mysql
++    newTag: "5.7"
++  - name: gcr.io/ml-pipeline/workflow-controller:v3.2.3-license-compliance
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/ml-pipeline.workflow-controller
++    newTag: v3.2.3-license-compliance
++  - name: gcr.io/arrikto/kubeflow/oidc-authservice:28c59ef
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/arrikto.kubeflow.oidc-authservice
++    newTag: 28c59ef
++  - name: gcr.io/knative-releases/knative.dev/serving/cmd/queue@sha256:0b8e031170354950f3395876961452af1c62f7ab5161c9e71867392c11881962
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/knative-releases.knative.dev.serving.cmd.queue
++    newTag: "20220624"
++  - name: public.ecr.aws/j1r0q0g6/notebooks/notebook-controller:v1.5.0
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/j1r0q0g6.notebooks.notebook-controller
++    newTag: v1.5.0
++  - name: public.ecr.aws/j1r0q0g6/notebooks/access-management:v1.5.0
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/j1r0q0g6.notebooks.access-management
++    newTag: v1.5.0
++  - name: public.ecr.aws/j1r0q0g6/notebooks/profile-controller:v1.5.0
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/j1r0q0g6.notebooks.profile-controller
++    newTag: v1.5.0
++  - name: gcr.io/kubebuilder/kube-rbac-proxy:v0.4.0
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/kubebuilder.kube-rbac-proxy
++    newTag: v0.4.0
++  - name: public.ecr.aws/j1r0q0g6/notebooks/tensorboard-controller:v1.5.0
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/j1r0q0g6.notebooks.tensorboard-controller
++    newTag: v1.5.0
++  - name: public.ecr.aws/j1r0q0g6/notebooks/tensorboards-web-app:v1.5.0
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/j1r0q0g6.notebooks.tensorboards-web-app
++    newTag: v1.5.0
++  - name: public.ecr.aws/j1r0q0g6/training/training-operator:174e8813666951ded505daf334a37f60fd50c18d
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/j1r0q0g6.training.training-operator
++    newTag: 174e8813666951ded505daf334a37f60fd50c18d
++  - name: public.ecr.aws/j1r0q0g6/notebooks/volumes-web-app:v1.5.0
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/j1r0q0g6.notebooks.volumes-web-app
++    newTag: v1.5.0
++  - name: public.ecr.aws/j1r0q0g6/notebooks/admission-webhook:v1.5.0
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/j1r0q0g6.notebooks.admission-webhook
++    newTag: v1.5.0
++  - name: public.ecr.aws/j1r0q0g6/notebooks/central-dashboard:v1.5.0
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/j1r0q0g6.notebooks.central-dashboard
++    newTag: v1.5.0
++  - name: public.ecr.aws/j1r0q0g6/notebooks/jupyter-web-app:v1.5.0
++    newName: registry.cn-hangzhou.aliyuncs.com/seam-kubeflow/j1r0q0g6.notebooks.jupyter-web-app
++    newTag: v1.5.0
++
+-- 
+2.7.4

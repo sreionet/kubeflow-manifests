@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - mysql.yaml
+  - pv.yaml
   - pvc.yaml
   - secret.yaml
   - service.yaml

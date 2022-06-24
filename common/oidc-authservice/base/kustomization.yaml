@@ -5,6 +5,7 @@ resources:
 - service.yaml
 - statefulset.yaml
 - envoy-filter.yaml
+- local_pv.yaml
 - pvc.yaml
 
 namespace: istio-system
@@ -42,5 +43,5 @@ configurations:
 - params.yaml
 images:
 - name: gcr.io/arrikto/kubeflow/oidc-authservice
-  newName: gcr.io/arrikto/kubeflow/oidc-authservice
+  newName: registry.cn-hangzhou.aliyuncs.com/seam/arrikto.kubeflow.oidc-authservice
   newTag: 28c59ef

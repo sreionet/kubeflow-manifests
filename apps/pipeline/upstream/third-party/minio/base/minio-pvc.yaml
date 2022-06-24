@@ -3,8 +3,10 @@ kind: PersistentVolumeClaim
 metadata:
   name: minio-pvc
 spec:
+  storageClassName: manual
   accessModes:
   - ReadWriteOnce
   resources:
     requests:
       storage: 20Gi
+  volumeName: minio-pv

@@ -17,6 +17,6 @@ spec:
         prefix: /dex/
     route:
     - destination:
-        host: $(DEX_SERVICE).$(DEX_NAMESPACE).svc.cluster.local
+        host: $(DEX_SERVICE).$(DEX_NAMESPACE).svc.kubeyy.com
         port:
           number: 5556
